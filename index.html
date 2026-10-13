@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Auto Surge – Autorickshaw Fare Surge Prediction</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#f6f5f1;--card:#fff;--tx:#1d1d1b;--mu:#6b6a64;--bd:#e3e1d8;--ac:#d98e04;--ac2:#1b6b5a;--pos:#c2410c;--neg:#1b6b5a}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#161614;--card:#211f1c;--tx:#f1efe8;--mu:#a09e94;--bd:#37352f;--ac:#f0b429;--ac2:#4fb59e;--pos:#fb923c;--neg:#4fb59e}}
+:root[data-theme="dark"]{--bg:#161614;--card:#211f1c;--tx:#f1efe8;--mu:#a09e94;--bd:#37352f;--ac:#f0b429;--ac2:#4fb59e;--pos:#fb923c;--neg:#4fb59e}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*:before,*:after{box-sizing:inherit}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.w{max-width:1080px;margin:0 auto;padding:16px}
+h1{font-size:22px;margin:0}h2{font-size:16px;margin:0 0 10px}h3{font-size:13px;margin:14px 0 6px;color:var(--mu);text-transform:uppercase;letter-spacing:.04em}
+.sub{color:var(--mu);font-size:13px;margin:2px 0 12px}
+nav{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+nav button,.pre button{border:1px solid var(--bd);background:var(--card);color:var(--tx);padding:7px 13px;border-radius:99px;cursor:pointer;font:inherit;font-size:13px}
+nav button.on{background:var(--ac);color:#1d1d1b;border-color:var(--ac);font-weight:600}
+.g{display:grid;grid-template-columns:minmax(0,340px) minmax(0,1fr);gap:14px}
+@media(max-width:800px){.g{grid-template-columns:1fr}}
+.c{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px;margin-bottom:14px}
+label{display:flex;justify-content:space-between;font-size:13px;margin-top:10px}label b{font-weight:600}
+input[type=range]{width:100%;accent-color:var(--ac)}
+select{width:100%;padding:7px;border-radius:8px;border:1px solid var(--bd);background:var(--bg);color:var(--tx);font:inherit}
+.pre{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px}
+.big{font-size:54px;font-weight:700;line-height:1;color:var(--ac)}
+.tag{display:inline-block;padding:2px 10px;border-radius:99px;font-size:12px;font-weight:600;background:var(--ac);color:#1d1d1b;margin-left:8px;vertical-align:middle}
+.kp{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px}
+.kp div{background:var(--bg);border-radius:10px;padding:10px}.kp small{color:var(--mu);display:block;font-size:12px}.kp b{font-size:20px}
+svg{width:100%;height:auto;display:block}svg text{fill:var(--tx);font:11px system-ui,sans-serif}svg .m{fill:var(--mu)}
+.flow{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.flow span{background:var(--bg);border:1px solid var(--bd);border-radius:10px;padding:8px 12px;font-size:13px;text-align:center}.flow i{color:var(--mu);font-style:normal}
+.tw{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:13px}td,th{border-bottom:1px solid var(--bd);padding:7px;text-align:left;vertical-align:top}
+ul{margin:4px 0;padding-left:20px}li{margin:3px 0}.mu{color:var(--mu);font-size:13px}.v{display:none}.v.on{display:block}
+</style></head><body><div class="w">
+<h1>🛺 Auto Surge</h1>
+<p class="sub">Autorickshaw fare surge prediction · XGBoost-style gradient-boosted regression + SHAP explainability · 21CSC305P Machine Learning, Review 1</p>
+<nav id="nav"></nav>
+
+<section class="v on" id="v0"><div class="g"><div>
+ <div class="c"><h2>Trip conditions</h2><div class="pre" id="pre"></div><div id="ctl"></div></div></div>
+ <div>
+ <div class="c"><div class="mu">Predicted surge multiplier</div><div><span class="big" id="sg">–</span><span class="tag" id="lv"></span></div>
+  <div class="kp" style="margin-top:12px"><div><small>Base fare</small><b id="bf"></b></div><div><small>Surged fare</small><b id="sf"></b></div><div><small>Extra vs base</small><b id="ex"></b></div></div></div>
+ <div class="c"><h2>Why this surge? (SHAP contributions)</h2><div class="mu" id="shn"></div><div id="shp"></div></div>
+ <div class="c"><h2>Surge across the day (other inputs fixed)</h2><div id="day"></div></div>
+ </div></div></section>
+
+<section class="v" id="v1">
+ <div class="c"><h2>Model performance (held-out 20% test set)</h2><div class="kp" id="met"></div><p class="mu" id="mnote"></p></div>
+ <div class="g" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr))">
+  <div class="c"><h2>Actual vs predicted surge</h2><div id="sc"></div></div>
+  <div class="c"><h2>Feature importance (gain)</h2><div id="gi"></div></div>
+  <div class="c"><h2>Mean |SHAP| (test set)</h2><div id="gs"></div></div></div>
+</section>
+
+<section class="v" id="v2">
+ <div class="c"><h2>Architecture / flow</h2><div class="flow" id="fl"></div></div>
+ <div class="c"><h2>Modules</h2><ul id="mod"></ul></div>
+ <div class="c"><h2>Algorithm – XGBoost regressor</h2><ul id="alg"></ul></div>
+</section>
+
+<section class="v" id="v3">
+ <div class="c"><h2>Abstract</h2><p id="ab"></p><h3>Scope &amp; motivation</h3><p id="sm"></p><h3>Problem statement</h3><p id="ps"></p><h3>Objectives</h3><ul id="ob"></ul></div>
+ <div class="c"><h2>Literature survey</h2><div class="tw"><table id="lt"></table></div></div>
+ <div class="c"><h2>Tools &amp; technologies</h2><ul id="tl"></ul><h3>References</h3><ul id="rf"></ul>
+ <p class="mu">Note: no unified public autorickshaw pricing dataset exists, so this app trains on a simulated dataset whose demand logic (rush hours, rain × traffic, events, heat, city size) mirrors the proxy signals in the proposal. Swap in real API data for production use.</p></div>
+</section>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+// ---------- data simulation (seeded) ----------
+let seed=42;const rnd=()=>(seed=(seed*1664525+1013904223)>>>0)/4294967296;
+const gn=()=>Math.sqrt(-2*Math.log(rnd()+1e-9))*Math.cos(6.2832*rnd());
+const gs=(x,m,s)=>Math.exp(-((x-m)**2)/(2*s*s)),cl=(x,a,b)=>Math.max(a,Math.min(b,x));
+const F=['hour','weekend','rain','temp','traffic','demand','event','city'];
+const FN={hour:'Hour of day',weekend:'Weekend',rain:'Rainfall',temp:'Temperature',traffic:'Traffic index',demand:'Search-trend demand',event:'Local event',city:'City size tier'};
+const EV=['None','Festival','Concert','Cricket match','Public holiday'];
+function truth(r){const[h,wk,rain,tp,tr,dm,ev,ct]=r;
+ const rush=gs(h,8.7,1.5)+gs(h,18,1.8),rf=1-Math.exp(-rain/8);
+ return 1+.35*rush+.2*gs(h,22,1.5)*wk+.5*rf*(1+.8*tr/100)+.3*rf*rush+.4*Math.pow(tr/100,1.5)+.5*Math.pow(dm/100,2)
+ +[0,.35,.45,.5,.25][ev]*(.5+dm/100)+.15*Math.max(0,tp-36)/6+[0,.08,.15][ct];}
+function sample(){const h=Math.floor(rnd()*24),wk=rnd()<2/7?1:0,rain=rnd()<.3?Math.min(40,-8*Math.log(rnd()+1e-9)):0,tp=22+rnd()*18,ev=rnd()<.3?1+Math.floor(rnd()*4):0,ct=Math.floor(rnd()*3);
+ const tr=cl(30+40*(gs(h,9,2)+gs(h,18,2.2))+15*gn()+rain*.8,0,100),dm=cl(20+50*rnd()+(ev?15:0)+8*gn(),0,100);
+ const x=[h,wk,Math.round(rain*10)/10,Math.round(tp),Math.round(tr),Math.round(dm),ev,ct];return[x,cl(truth(x)+.05*gn(),1,3)];}
+const D=Array.from({length:4000},sample),nT=3200,TR=D.slice(0,nT),TE=D.slice(nT);
+// ---------- gradient boosted trees ----------
+const NT=140,LR=.12,DEPTH=3,MINL=20,gain=new Array(8).fill(0);
+const TH=F.map((_,f)=>{const u=[...new Set(TR.map(d=>d[0][f]))].sort((a,b)=>a-b);if(u.length<=16)return u.slice(0,-1).map((v,i)=>(v+u[i+1])/2);
+ const o=[];for(let q=1;q<16;q++){const v=u[Math.floor(q*u.length/16)];if(!o.includes(v))o.push(v)}return o});
+const bin=(f,x)=>{let k=0;while(k<TH[f].length&&x>TH[f][k])k++;return k};
+const B=TR.map(d=>d[0].map((x,f)=>bin(f,x)));
+function build(idx,res,dep){const n=idx.length;let s=0;for(const i of idx)s+=res[i];const leaf={v:s/n,n};
+ if(dep===DEPTH||n<2*MINL)return leaf;let best={g:1e-9};
+ for(let f=0;f<8;f++){const T=TH[f].length;if(!T)continue;const c=new Array(T+1).fill(0),su=new Array(T+1).fill(0);
+  for(const i of idx){c[B[i][f]]++;su[B[i][f]]+=res[i]}let cl_=0,sl=0;
+  for(let k=0;k<T;k++){cl_+=c[k];sl+=su[k];const cr=n-cl_;if(cl_<MINL||cr<MINL)continue;
+   const g=sl*sl/cl_+(s-sl)**2/cr-s*s/n;if(g>best.g)best={g,f,k}}}
+ if(best.f===undefined)return leaf;gain[best.f]+=best.g;
+ const L=[],R=[];for(const i of idx)(B[i][best.f]<=best.k?L:R).push(i);
+ return{f:best.f,t:TH[best.f][best.k],n,l:build(L,res,dep+1),r:build(R,res,dep+1)};}
+const F0=TR.reduce((a,d)=>a+d[1],0)/nT,trees=[],cur=TR.map(()=>F0);
+for(let m=0;m<NT;m++){const res=TR.map((d,i)=>d[1]-cur[i]);const t=build(TR.map((_,i)=>i),res,0);trees.push(t);
+ const ap=(t,i)=>{while(t.f!==undefined)t=B[i][t.f]<=TH[t.f].indexOf(t.t)?t.l:t.r;return t.v};TR.forEach((_,i)=>cur[i]+=LR*ap(t,i))}
+const walk=(t,x)=>{while(t.f!==undefined)t=x[t.f]<=t.t?t.l:t.r;return t.v};
+const raw=x=>F0+LR*trees.reduce((a,t)=>a+walk(t,x),0),pred=x=>cl(raw(x),1,3);
+// ---------- SHAP (exact Shapley over 8 features, cover-weighted tree expectation) ----------
+function ev(t,x,m){if(t.f===undefined)return t.v;if(m>>t.f&1)return ev(x[t.f]<=t.t?t.l:t.r,x,m);return(t.l.n*ev(t.l,x,m)+t.r.n*ev(t.r,x,m))/t.n}
+const fact=[1];for(let i=1;i<9;i++)fact[i]=fact[i-1]*i;const pc=m=>{let c=0;while(m){c+=m&1;m>>=1}return c};
+function shap(x){const val=new Float64Array(256);for(let m=0;m<256;m++)val[m]=F0+LR*trees.reduce((a,t)=>a+ev(t,x,m),0);
+ const phi=new Array(8).fill(0);for(let f=0;f<8;f++)for(let m=0;m<256;m++){if(m>>f&1)continue;const s=pc(m);phi[f]+=fact[s]*fact[7-s]/fact[8]*(val[m|1<<f]-val[m])}
+ return{phi,base:val[0]}}
+// ---------- metrics ----------
+const yt=TE.map(d=>d[1]),yp=TE.map(d=>pred(d[0])),mean=yt.reduce((a,b)=>a+b)/yt.length;
+const mae=yt.reduce((a,y,i)=>a+Math.abs(y-yp[i]),0)/yt.length,rmse=Math.sqrt(yt.reduce((a,y,i)=>a+(y-yp[i])**2,0)/yt.length);
+const r2=1-yt.reduce((a,y,i)=>a+(y-yp[i])**2,0)/yt.reduce((a,y)=>a+(y-mean)**2,0),mb=yt.reduce((a,y)=>a+Math.abs(y-mean),0)/yt.length;
+const gsh=new Array(8).fill(0);TE.slice(0,80).forEach(d=>shap(d[0]).phi.forEach((p,f)=>gsh[f]+=Math.abs(p)/80));
+// ---------- charts ----------
+function bars(el,items,signed,base){const W=520,rh=26,H=items.length*rh+8,mx=Math.max(...items.map(i=>Math.abs(i.v)),1e-6),lw=150,cw=W-lw-60,zero=signed?lw+cw/2:lw;
+ el.innerHTML=`<svg viewBox="0 0 ${W} ${H}">`+items.map((it,i)=>{const w=Math.abs(it.v)/mx*(signed?cw/2:cw),x=signed&&it.v<0?zero-w:zero,y=i*rh+4;
+ return`<text x="${lw-8}" y="${y+14}" text-anchor="end">${it.l}</text><rect x="${x}" y="${y+2}" width="${Math.max(w,1)}" height="16" rx="3" fill="${signed?(it.v>=0?'var(--pos)':'var(--neg)'):'var(--ac2)'}"/><text class="m" x="${signed&&it.v<0?x-4:x+w+4}" y="${y+14}" text-anchor="${signed&&it.v<0?'end':'start'}">${(signed&&it.v>0?'+':'')+it.v.toFixed(signed?3:3)}</text>`}).join('')+(signed?`<line x1="${zero}" x2="${zero}" y1="0" y2="${H}" stroke="var(--mu)"/>`:'')+'</svg>'}
+function line(el,pts,cx){const W=520,H=190,p=34,X=i=>p+i/23*(W-p-10),Y=v=>H-24-(v-1)/2*(H-40);
+ el.innerHTML=`<svg viewBox="0 0 ${W} ${H}">`+[1,1.5,2,2.5,3].map(v=>`<line x1="${p}" x2="${W-10}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--bd)"/><text class="m" x="${p-5}" y="${Y(v)+4}" text-anchor="end">${v}×</text>`).join('')
+ +[0,6,12,18,23].map(h=>`<text class="m" x="${X(h)}" y="${H-6}" text-anchor="middle">${h}h</text>`).join('')
+ +`<polyline fill="none" stroke="var(--ac)" stroke-width="2.5" points="${pts.map((v,i)=>X(i)+','+Y(v)).join(' ')}"/><circle cx="${X(cx)}" cy="${Y(pts[cx])}" r="6" fill="var(--ac2)"/></svg>`}
+function scatter(el){const W=360,H=300,p=34,P=v=>p+(v-1)/2*(W-p-10),Q=v=>H-p-(v-1)/2*(H-p-10);
+ el.innerHTML=`<svg viewBox="0 0 ${W} ${H}"><line x1="${P(1)}" y1="${Q(1)}" x2="${P(3)}" y2="${Q(3)}" stroke="var(--mu)" stroke-dasharray="4"/>`+yt.slice(0,250).map((y,i)=>`<circle cx="${P(y)}" cy="${Q(yp[i])}" r="2.5" fill="var(--ac)" opacity=".6"/>`).join('')
+ +`<text class="m" x="${W/2}" y="${H-6}" text-anchor="middle">actual surge →</text><text class="m" x="10" y="14">predicted ↑</text></svg>`}
+// ---------- UI ----------
+const C=[['hour','Hour of day',0,23,1,17,v=>v+':00'],['rain','Rainfall',0,40,.5,0,v=>v+' mm/h'],['temp','Temperature',22,40,1,32,v=>v+' °C'],['traffic','Traffic index',0,100,1,50,v=>v],['demand','Search-trend demand',0,100,1,40,v=>v],['km','Trip distance',1,25,.5,5,v=>v+' km']];
+const S={hour:17,weekend:0,rain:0,temp:32,traffic:50,demand:40,event:0,city:2,km:5};
+const PRE={'Calm afternoon':{hour:14,rain:0,temp:30,traffic:30,demand:20,event:0,weekend:0},'Rainy evening rush':{hour:18,rain:20,temp:27,traffic:85,demand:70,event:0,weekend:0},'Festival night':{hour:21,rain:0,temp:29,traffic:75,demand:90,event:1,weekend:1},'Match day, heat':{hour:19,rain:2,temp:40,traffic:70,demand:85,event:3,weekend:1}};
+$('ctl').innerHTML=C.map(c=>`<label>${c[1]}<b id="o_${c[0]}"></b></label><input type="range" id="i_${c[0]}" min="${c[2]}" max="${c[3]}" step="${c[4]}">`).join('')
+ +`<label>Local event</label><select id="s_event">${EV.map((e,i)=>`<option value="${i}">${e}</option>`).join('')}</select>
+ <label>City</label><select id="s_city"><option value="2">Chennai (metro)</option><option value="2">Mumbai (metro)</option><option value="2">Delhi (metro)</option><option value="2">Bengaluru (metro)</option><option value="1">Lucknow (large)</option><option value="1">Coimbatore (large)</option><option value="0">Madurai (mid-size)</option></select>
+ <label>Day type</label><select id="s_weekend"><option value="0">Weekday</option><option value="1">Weekend</option></select>`;
+$('pre').innerHTML=Object.keys(PRE).map(k=>`<button>${k}</button>`).join('');
+[...$('pre').children].forEach(b=>b.onclick=()=>{Object.assign(S,PRE[b.textContent]);sync();run()});
+function sync(){C.forEach(c=>{$('i_'+c[0]).value=S[c[0]]});$('s_event').value=S.event;$('s_weekend').value=S.weekend}
+C.forEach(c=>$('i_'+c[0]).oninput=e=>{S[c[0]]=+e.target.value;run()});
+['event','weekend'].forEach(k=>$('s_'+k).onchange=e=>{S[k]=+e.target.value;run()});$('s_city').onchange=e=>{S.city=+e.target.value;run()};
+const vec=o=>F.map(f=>o[f]);
+function run(){C.forEach(c=>$('o_'+c[0]).textContent=c[6](S[c[0]]));
+ const x=vec(S),s=pred(x);$('sg').textContent=s.toFixed(2)+'×';
+ $('lv').textContent=s<1.15?'Normal':s<1.5?'Moderate':s<2?'High':'Extreme';
+ const bf=30+Math.max(0,S.km-1.5)*15;$('bf').textContent='₹'+Math.round(bf);$('sf').textContent='₹'+Math.round(bf*s);$('ex').textContent='+₹'+Math.round(bf*(s-1));
+ const{phi,base}=shap(x);const val={hour:S.hour+':00',weekend:S.weekend?'Weekend':'Weekday',rain:S.rain+' mm/h',temp:S.temp+'°C',traffic:S.traffic,demand:S.demand,event:EV[S.event],city:['Mid-size','Large','Metro'][S.city]};
+ bars($('shp'),F.map((f,i)=>({l:FN[f]+' = '+val[f],v:phi[i]})).sort((a,b)=>Math.abs(b.v)-Math.abs(a.v)),true);
+ $('shn').textContent=`Average model output ${base.toFixed(2)}× + contributions below = ${raw(x).toFixed(2)}× (clipped to 1–3×). Orange raises the surge; green lowers it.`;
+ line($('day'),Array.from({length:24},(_,h)=>pred(vec({...S,hour:h}))),S.hour)}
+// static tabs
+$('met').innerHTML=[['R²',r2.toFixed(3)],['MAE',mae.toFixed(3)],['RMSE',rmse.toFixed(3)],['Mean-baseline MAE',mb.toFixed(3)],['Trees × depth',NT+' × '+DEPTH],['Train / test',nT+' / '+TE.length]].map(m=>`<div><small>${m[0]}</small><b>${m[1]}</b></div>`).join('');
+$('mnote').textContent='The model trained in your browser on page load: sequential trees, each fitting the residuals of the previous ones (learning rate '+LR+').';
+scatter($('sc'));const srt=a=>F.map((f,i)=>({l:FN[f],v:a[i]})).sort((a,b)=>b.v-a.v),tg=gain.reduce((a,b)=>a+b);
+bars($('gi'),srt(gain.map(g=>g/tg)),false);bars($('gs'),srt(gsh),false);
+const L=(id,a)=>$(id).innerHTML=a.map(t=>`<li>${t}</li>`).join('');
+$('fl').innerHTML=['Public data sources','Data integration','Preprocessing &amp; feature engineering','XGBoost regressor','Surge multiplier prediction','SHAP &amp; feature importance','Interactive dashboard'].map(t=>`<span>${t}</span>`).join('<i>→</i>');
+L('mod',['<b>Module 1 – Data collection:</b> weather, traffic, search-trend/demand and calendar-event signals.','<b>Module 2 – Preprocessing:</b> combine and organise data into a usable dataset.','<b>Module 3 – Feature engineering:</b> transform raw information into prediction features.','<b>Module 4 – ML model:</b> train the gradient-boosted regressor.','<b>Module 5 – Prediction &amp; explainability:</b> surge estimates plus SHAP analysis.','<b>Module 6 – Dashboard:</b> this interactive interface.']);
+L('alg',['Ensemble of decision trees built sequentially; each tree corrects the errors of the previous ones.','Handles mixed real-world inputs with minimal preprocessing.','Captures nonlinear interactions such as rain + rush hour + festival producing a larger surge.','Feature importance and SHAP values keep predictions interpretable rather than a black box.']);
+$('ab').textContent='Predicts autorickshaw fare surge multipliers with regression-based ML, using weather, traffic, demand-trend proxies and calendar-based event features. Data is assembled from public sources because no unified public autorickshaw pricing dataset exists. A boosted-tree regressor models the nonlinear relationships, and an interactive dashboard gives lightweight, explainable predictions.';
+$('sm').textContent='Predict demand-based fare surge for autorickshaws in Indian cities, offering a data-driven alternative to manual fare negotiation and driver discretion, with an interpretable view of the factors behind each surge.';
+$('ps').textContent='Develop an ML system that predicts an appropriate autorickshaw surge multiplier from weather, traffic, demand trends and events, handling interacting factors and keeping the prediction interpretable.';
+L('ob',['Collect weather, traffic, demand and event data.','Create a unified dataset from public sources and proxy signals.','Preprocess and engineer features.','Train a regression model for the surge multiplier.','Capture nonlinear relationships among real-world factors.','Use feature importance and SHAP for interpretability.','Build a lightweight interactive dashboard.']);
+$('lt').innerHTML='<tr><th>Approach</th><th>Method</th><th>Limitation / gap</th></tr>'+[['Ride-hailing dynamic pricing','Demand-based pricing','Designed for app-based cabs'],['Traditional autorickshaw pricing','Manual / fixed fare','Not data-driven; varies by situation'],['Traffic-based prediction','Traffic and trip information','May miss weather and event effects together'],['Demand prediction','Historical demand patterns','No direct fare-multiplier estimate'],['<b>Proposed approach</b>','XGBoost + weather + traffic + demand + events','Unified, explainable autorickshaw surge prediction']].map(r=>'<tr>'+r.map(c=>`<td>${c}</td>`).join('')+'</tr>').join('');
+L('tl',['Python – pandas and NumPy for data assembly and feature engineering.','XGBoost / scikit-learn – model training and baselines.','SHAP – interpretability analysis.','Public weather APIs, city traffic indices, search-trend sources.','Streamlit / Flask – dashboard (this build: plain HTML/JS).','Jupyter / Google Colab – experimentation.']);
+L('rf',['XGBoost – Extreme Gradient Boosting for scalable ML.','Scikit-learn – ML algorithms and evaluation tools.','SHAP – Explainable ML and feature-importance analysis.','Public weather APIs · City traffic indices · Search-trend data.']);
+['Predict','Model &amp; explainability','Pipeline','Project'].forEach((t,i)=>{const b=document.createElement('button');b.innerHTML=t;b.onclick=()=>{[...$('nav').children].forEach((x,j)=>{x.classList.toggle('on',i===j);$('v'+j).classList.toggle('on',i===j)})};if(!i)b.className='on';$('nav').appendChild(b)});
+sync();run();
+</script></body></html>
